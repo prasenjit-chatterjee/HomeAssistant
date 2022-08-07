@@ -1,0 +1,163 @@
+# Single cotainer in each pod  
+apiVersion: v1
+kind: Service
+metadata:
+  name: external-lb
+spec:
+  type: LoadBalancer
+  ports:
+  - name: esphome
+    port: 6052
+    targetPort: 6052
+  - name: duplicati
+    port: 8200
+    targetPort: 8200
+  - name: homeassistant
+    port: 8123
+    targetPort: 8123
+  selector:
+    lbtype: external
+    
+---
+
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: homeassistant
+spec:
+  selector:
+    matchLabels:
+      lbtype: external
+  replicas: 1
+  template:
+    metadata:
+      labels:
+        lbtype: external
+        app: homeassistant
+    spec:
+      containers:
+      - name: home-assistant
+        image: "prasenjit2564/myha:latest"
+        imagePullPolicy: IfNotPresent
+        ports:
+        - containerPort: 8123		
+        volumeMounts:
+        - name: ha-storage
+          mountPath: /config            
+      volumes:
+      - name: ha-storage
+        hostPath:            
+            path: /opt/homeassistant-config
+    
+---
+
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: duplicati
+spec:
+  selector:
+    matchLabels:
+      lbtype: external
+  replicas: 1
+  template:
+    metadata:
+      labels:
+        lbtype: external
+        app: duplicati
+    spec:
+      containers:      
+      - name: duplicati
+        env:
+        - { name: PUID, value: "1000" }
+        - { name: PGID, value: "1000" }
+        - { name: TZ, value: "Europe/London" }
+        image: "duplicati/duplicati"
+        imagePullPolicy: IfNotPresent
+        ports:
+        - containerPort: 8200
+        volumeMounts:
+        - name: duplicati-source
+          mountPath: /source
+        - name: duplicati-config
+          mountPath: /config      
+      volumes:      
+      - name: duplicati-source
+        hostPath:            
+            path: /opt
+      - name: duplicati-config
+        hostPath:            
+            path: /opt/duplicati-config
+            
+---
+
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: esphome
+spec:
+  selector:
+    matchLabels:
+      lbtype: external
+  replicas: 1
+  template:
+    metadata:
+      labels:
+        lbtype: external
+        app: esphome
+    spec:
+      containers:      
+      - name: esphome
+        image: "esphome/esphome"
+        imagePullPolicy: IfNotPresent
+        ports:
+        - containerPort: 6052
+        
+---
+
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: pihole
+spec:
+  selector:
+    matchLabels:
+      lbtype: external
+  replicas: 1
+  template:
+    metadata:
+      labels:
+        lbtype: external
+        app: pihole
+    spec:
+      containers:      
+      - name: pihole
+        env:
+        - { name: DNS1, value: "9.9.9.9" }
+        - { name: DNS2, value: "149.112.112.112" }
+        - { name: TZ, value: "Europe/London" }
+        - { name: ServerIP, value: "192.168.0.26" }
+        image: "pihole/pihole:latest"
+        imagePullPolicy: IfNotPresent
+        ports:
+        - containerPort: 53
+          protocol: UDP
+          hostPort: 53
+        - containerPort: 53
+          protocol: TCP
+          hostPort: 53
+        - containerPort: 80
+          protocol: TCP
+          hostPort: 8001
+        volumeMounts:
+        - name: pihole-etc
+          mountPath: /etc/pihole
+        - name: pihole-etc-dns
+          mountPath: /etc/dnsmasq.d     
+      volumes:      
+      - name: pihole-etc
+        hostPath:            
+            path: /opt/pihole-config/etc-pihole
+      - name: pihole-etc-dns
+        hostPath:            
+            path: /opt/pihole-config/etc-dnsmasq.d
