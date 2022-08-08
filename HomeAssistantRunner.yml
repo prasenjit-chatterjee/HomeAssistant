@@ -112,6 +112,13 @@ spec:
         imagePullPolicy: IfNotPresent
         ports:
         - containerPort: 6052
+        volumeMounts:
+        - name: esphome-storage
+          mountPath: /config
+      volumes:
+      - name: esphome-storage
+        hostPath:            
+            path: /opt/esphome-config
         
 ---
 
